@@ -1,13 +1,11 @@
 package org.example;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.net.Inet4Address;
+import java.io.*;
 import java.net.Socket;
-import java.net.UnknownHostException;
+import java.util.logging.Logger;
 
 public class FileSender {
+    private final Logger logger = Logger.getLogger(FileSender.class.getName());
     private final byte[] fileContent;
     private final String fileName;
     private int fileSize;
@@ -16,24 +14,41 @@ public class FileSender {
         this.fileName = fileName;
         this.fileSize = fileSize;
     }
-    public void sendFile(){
-        final int datagramSize = 100;
+    public void sendFile(String serverAddress, int serverPort){
         Socket sendSocket;
+        final int DATAGRAM_SIZE = 100;
+        final int MAX_MASSAGE_BYTE = 20;
         try {
-            sendSocket = new Socket(Inet4Address.getLocalHost().getHostAddress(), 8080);
-            OutputStreamWriter outputStreamWriter = new OutputStreamWriter(sendSocket.getOutputStream());
-            outputStreamWriter.write(this.fileName + "\n");
-            outputStreamWriter.write( this.fileSize+ "\n");
-            while (fileSize > datagramSize){
-                outputStreamWriter.write(this.fileContent[datagramSize]);
-                System.arraycopy(fileContent, 0,fileContent, 100, datagramSize);
-                this.fileSize -= datagramSize;
+            sendSocket = new Socket(serverAddress, serverPort);
+            DataOutputStream outputStreamWriter = new DataOutputStream(sendSocket.getOutputStream());
+            DataInputStream reader = new DataInputStream(sendSocket.getInputStream());
+            outputStreamWriter.write((this.fileName + "\n").getBytes());
+            outputStreamWriter.flush();
+            outputStreamWriter.write((this.fileSize + "\n").getBytes());
+            outputStreamWriter.flush();
+            int leftToPass = this.fileSize;
+
+            byte[] copyArray = new byte[DATAGRAM_SIZE];
+            int iterationNum = 0;
+            while (leftToPass > DATAGRAM_SIZE){
+                System.arraycopy(fileContent, DATAGRAM_SIZE *iterationNum, copyArray, 0, DATAGRAM_SIZE);
+                outputStreamWriter.write(copyArray);
+                outputStreamWriter.flush();
+                leftToPass -= DATAGRAM_SIZE;
+                iterationNum++;
             }
-            outputStreamWriter.write(this.fileContent[this.fileSize - 1]);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-        try {
+            if (leftToPass != 0) {
+                byte[] leftArray = new byte[leftToPass];
+                System.arraycopy(fileContent, DATAGRAM_SIZE *iterationNum, leftArray, 0, leftToPass);
+                outputStreamWriter.write(leftArray);
+                outputStreamWriter.flush();
+            }
+            String dispatchStatus = new String(reader.readNBytes(MAX_MASSAGE_BYTE));
+            if (dispatchStatus.equals("File accepted")){
+                logger.info(dispatchStatus);
+            } else if (dispatchStatus.equals("File not accepted")) {
+                logger.warning(dispatchStatus);
+            }
             sendSocket.close();
         } catch (IOException e) {
             throw new RuntimeException(e);

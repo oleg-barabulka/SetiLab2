@@ -7,7 +7,7 @@ import java.net.Socket;
 
 public class Main {
     public static void main(String[] args) {
-        Receiver receiver = new Receiver();
+        Receiver receiver = new Receiver(Integer.parseInt(args[0]));
         receiver.takeNewTask();
     }
 }
